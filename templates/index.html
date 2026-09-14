@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>แปลงไฟล์งบทดลอง</title>
+    <style>
+        body { font-family: "Tahoma", sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+        h1 { text-align: center; font-size: 22px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+        td { padding: 8px; }
+        .error { color: #c0392b; font-weight: bold; background: #fdecea; padding: 10px; border-radius: 4px; }
+        .warn-box { color: #c0392b; background: #fff6e5; padding: 10px; border-radius: 4px; margin-top: 12px; }
+        .warn-box.malformed { font-weight: bold; }
+        ul { text-align: left; }
+        button { padding: 8px 20px; font-size: 15px; cursor: pointer; }
+        .summary { background: #f4f8fb; padding: 14px; border-radius: 6px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <h1>แปลงไฟล์งบทดลองเป็นเทมเพลตยอดยกมา-ยอดยกไป</h1>
+
+    {% if error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+
+    {% if not result %}
+    <form action="/process" method="post" enctype="multipart/form-data">
+        <table align="center">
+            <tr>
+                <td align="right">ไฟล์งบทดลองเดือนก่อนหน้า :</td>
+                <td><input type="file" name="previous_file" accept=".xls,.xlsx" required></td>
+            </tr>
+            <tr>
+                <td align="right">ไฟล์งบทดลองเดือนปัจจุบัน :</td>
+                <td><input type="file" name="current_file" accept=".xls,.xlsx" required></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td><button type="submit">ตกลง</button></td>
+            </tr>
+        </table>
+    </form>
+    {% else %}
+    <div class="summary">
+        <p>เดือนก่อนหน้า: <b>{{ result.previous_month_name }} {{ result.previous_year }}</b> ({{ result.previous_found_codes }} รหัสบัญชี)</p>
+        <p>เดือนปัจจุบัน: <b>{{ result.month_name }} {{ result.year }}</b> ({{ result.found_codes }} รหัสบัญชี)</p>
+        <p>ยอดเดบิตรวม (เดือนปัจจุบัน) {{ "{:,.2f}".format(result.total_debit) }} / ยอดเครดิตรวม {{ "{:,.2f}".format(result.total_credit) }}</p>
+    </div>
+
+    {% if result.only_in_current %}
+    <div class="warn-box">
+        <p>พบรหัสบัญชี {{ result.only_in_current|length }} รายการ ที่มีในไฟล์เดือนปัจจุบัน แต่ไม่มีในไฟล์เดือนก่อนหน้า (ยอดยกมาของรายการนี้จะเป็น 0):</p>
+        <ul>
+            {% for w in result.only_in_current %}
+            <li>{{ w }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if result.only_in_previous %}
+    <div class="warn-box">
+        <p>พบรหัสบัญชี {{ result.only_in_previous|length }} รายการ ที่มีในไฟล์เดือนก่อนหน้า แต่ไม่มีในไฟล์เดือนปัจจุบัน (ตรวจสอบว่าบัญชีปิดไปแล้วจริงหรือไม่):</p>
+        <ul>
+            {% for w in result.only_in_previous %}
+            <li>{{ w }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% for label, malformed in [("เดือนก่อนหน้า", result.malformed_previous), ("เดือนปัจจุบัน", result.malformed_current)] %}
+    {% if malformed %}
+    <div class="warn-box malformed">
+        <p>คำเตือน: ไฟล์{{ label }} พบ {{ malformed|length }} แถวที่รหัสบัญชีมีรูปแบบผิดปกติ (อ่านไม่ออกว่าเป็นบัญชีใด)
+           แต่มีมูลค่าเงินติดมาด้วย จำนวนเงินเหล่านี้ <u>ไม่ถูกนำไปรวมในไฟล์ผลลัพธ์</u> กรุณาตรวจสอบไฟล์ต้นฉบับและนำเข้าด้วยตนเองหากจำเป็น:</p>
+        <ul>
+            {% for w in malformed %}
+            <li>แถวที่ {{ w.row }}: รหัส "{{ w.code }}" {{ w.name }} — เดบิต {{ "{:,.2f}".format(w.debit) }}
+                เครดิต {{ "{:,.2f}".format(w.credit) }} EndDr {{ "{:,.2f}".format(w.end_dr) }} EndCr {{ "{:,.2f}".format(w.end_cr) }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <p>ตรวจสอบยอดข้างต้นแล้วกดปุ่มด้านล่างเพื่อรับไฟล์ (จะได้ไฟล์ชื่อ "{{ result.filename }}")</p>
+    <form action="/download" method="post" style="text-align:center">
+        <button type="submit">ดาวน์โหลดไฟล์ผลลัพธ์</button>
+    </form>
+    <p style="text-align:center"><a href="/">← อัปโหลดไฟล์อื่น</a></p>
+    {% endif %}
+</body>
+</html>
